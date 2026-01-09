@@ -118,8 +118,11 @@ async function generateWithClaude(
 }
 
 export async function POST(request: Request) {
+  let requestPrompt: string | undefined;
+
   try {
     const { prompt, currentCode, isModification, provider, referenceImage } = await request.json();
+    requestPrompt = prompt;
 
     if (!prompt) {
       return new Response(
@@ -177,7 +180,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const errorRef = generateErrorRef();
-    logError(errorRef, { prompt, error });
+    logError(errorRef, { prompt: requestPrompt, error });
 
     const errorMessage = error instanceof Error ? error.message : 'Failed to generate code';
 
