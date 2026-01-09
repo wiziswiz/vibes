@@ -50,6 +50,9 @@ export function VoiceInput({
   const [isSupported, setIsSupported] = useState(true);
   const [interimText, setInterimText] = useState('');
   const recognitionRef = useRef<SpeechRecognitionType | null>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSpokenRef = useRef(false);
+  const accumulatedTranscriptRef = useRef('');
 
   // Check for browser support
   useEffect(() => {
@@ -79,14 +82,33 @@ export function VoiceInput({
         }
       }
 
+      // Clear any existing silence timeout
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
       if (interim) {
+        hasSpokenRef.current = true;
         setInterimText(interim);
         onInterimTranscript?.(interim);
       }
 
       if (finalTranscript) {
+        hasSpokenRef.current = true;
+        // Accumulate the transcript
+        accumulatedTranscriptRef.current += ' ' + finalTranscript;
         setInterimText('');
-        onTranscript(finalTranscript);
+      }
+
+      // After any speech activity, set a silence timeout to auto-stop
+      // This gives the user time to continue speaking but stops after a pause
+      if (hasSpokenRef.current) {
+        silenceTimeoutRef.current = setTimeout(() => {
+          if (recognitionRef.current) {
+            recognition.stop();
+          }
+        }, finalTranscript ? 1200 : 2000); // Shorter timeout after final result
       }
     };
 
@@ -98,6 +120,18 @@ export function VoiceInput({
     recognition.onend = () => {
       setIsListening(false);
       setInterimText('');
+      // Clear timeout on end
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      // Submit accumulated transcript when stopping
+      const fullTranscript = accumulatedTranscriptRef.current.trim();
+      if (fullTranscript) {
+        onTranscript(fullTranscript);
+        accumulatedTranscriptRef.current = '';
+      }
+      hasSpokenRef.current = false;
     };
 
     recognition.onstart = () => {
@@ -117,7 +151,14 @@ export function VoiceInput({
     if (isListening) {
       recognitionRef.current.stop();
     } else {
+      // Reset state for new recording
       setInterimText('');
+      hasSpokenRef.current = false;
+      accumulatedTranscriptRef.current = '';
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
       recognitionRef.current.start();
     }
   }, [isListening]);
