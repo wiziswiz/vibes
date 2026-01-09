@@ -11,7 +11,7 @@ interface P5CanvasProps {
   height?: number;
 }
 
-function createIframeContent(sketchCode: string): string {
+function createIframeContent(sketchCode: string, canvasWidth: number, canvasHeight: number): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -37,6 +37,10 @@ function createIframeContent(sketchCode: string): string {
 </head>
 <body>
   <script>
+    // Store canvas dimensions for use in sketches
+    window.__canvasWidth = ${canvasWidth};
+    window.__canvasHeight = ${canvasHeight};
+
     // Safety wrapper
     window.onerror = function(msg, url, lineNo, columnNo, error) {
       window.parent.postMessage({
@@ -56,6 +60,17 @@ function createIframeContent(sketchCode: string): string {
         message: args.join(' ')
       }, '*');
     };
+
+    // Listen for resize messages from parent
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'resize') {
+        window.__canvasWidth = event.data.width;
+        window.__canvasHeight = event.data.height;
+        if (typeof resizeCanvas === 'function') {
+          resizeCanvas(event.data.width, event.data.height);
+        }
+      }
+    });
 
     try {
       // User's p5.js code
@@ -85,6 +100,8 @@ export function P5Canvas({
 }: P5CanvasProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const prevCodeRef = useRef(code);
+  const dimensionsRef = useRef({ width, height });
 
   // Handle messages from iframe
   useEffect(() => {
@@ -106,9 +123,33 @@ export function P5Canvas({
   useEffect(() => {
     if (!iframeRef.current) return;
 
-    setIsLoading(true);
-    iframeRef.current.srcdoc = createIframeContent(code);
-  }, [code]);
+    // Only reload iframe if code actually changed
+    if (prevCodeRef.current !== code) {
+      setIsLoading(true);
+      iframeRef.current.srcdoc = createIframeContent(code, width, height);
+      prevCodeRef.current = code;
+    }
+  }, [code, width, height]);
+
+  // Update dimensions ref
+  useEffect(() => {
+    dimensionsRef.current = { width, height };
+  }, [width, height]);
+
+  // Send resize message to iframe when dimensions change (without reloading)
+  useEffect(() => {
+    if (!iframeRef.current?.contentWindow || isLoading) return;
+
+    try {
+      iframeRef.current.contentWindow.postMessage({
+        type: 'resize',
+        width,
+        height
+      }, '*');
+    } catch {
+      // Cross-origin restrictions may prevent this
+    }
+  }, [width, height, isLoading]);
 
   // Handle play/pause by controlling iframe
   useEffect(() => {

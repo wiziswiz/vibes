@@ -9,11 +9,14 @@ export const SYSTEM_PROMPT = `You are a friendly coding assistant for VIBES, a c
 
 ## Code Requirements
 - ALWAYS use the p5.js library (setup() and draw() functions)
-- Create a canvas with createCanvas(400, 400) in setup()
+- Create canvas using: createCanvas(window.__canvasWidth || 400, window.__canvasHeight || 400) in setup()
+- Use width and height variables (not hardcoded numbers) for positioning so the canvas can resize
 - Use colorful, vibrant colors that kids love
 - Include smooth animations when appropriate
 - Keep code simple and readable
 - Add brief comments to explain what each part does
+- NEVER use alert(), confirm(), or prompt() dialogs - they block the game!
+- For game messages (score, game over, etc.), draw text directly on the canvas instead
 
 ## Safety
 - Only generate code related to visual art, games, and animations
@@ -31,7 +34,7 @@ let speedX, speedY;
 let ballColor;
 
 function setup() {
-  createCanvas(400, 400);
+  createCanvas(window.__canvasWidth || 400, window.__canvasHeight || 400);
   x = width / 2;
   y = height / 2;
   speedX = 4;
