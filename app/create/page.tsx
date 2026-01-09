@@ -34,6 +34,10 @@ export default function CreatePage() {
   const [showSaved, setShowSaved] = useState(false);
   const [lastPrompt, setLastPrompt] = useState('');
 
+  // Undo/Redo history
+  const [codeHistory, setCodeHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
   // Workspace store
   const {
     theme,
@@ -60,6 +64,15 @@ export default function CreatePage() {
       setCode(fullCode);
       setStreamingCode('');
       setIsGenerating(false);
+
+      // Add to history (truncate any redo history)
+      if (fullCode) {
+        setCodeHistory(prev => {
+          const newHistory = prev.slice(0, historyIndex + 1);
+          return [...newHistory, fullCode];
+        });
+        setHistoryIndex(prev => prev + 1);
+      }
 
       // Auto-save the project (silent, no popups)
       if (fullCode && lastPrompt) {
@@ -92,6 +105,9 @@ export default function CreatePage() {
         setCode(project.code);
         setCurrentProjectId(project.id);
         setLastPrompt(project.prompt);
+        // Initialize history with loaded project
+        setCodeHistory([project.code]);
+        setHistoryIndex(0);
         // Clear sessionStorage after loading
         sessionStorage.removeItem('vibes_load_project');
       } catch (e) {
@@ -99,6 +115,52 @@ export default function CreatePage() {
       }
     }
   }, [setCode]);
+
+  // Undo/Redo computed values
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < codeHistory.length - 1;
+
+  // Undo handler
+  const handleUndo = useCallback(() => {
+    if (!canUndo) return;
+    const newIndex = historyIndex - 1;
+    setHistoryIndex(newIndex);
+    setCode(codeHistory[newIndex]);
+  }, [canUndo, historyIndex, codeHistory, setCode]);
+
+  // Redo handler
+  const handleRedo = useCallback(() => {
+    if (!canRedo) return;
+    const newIndex = historyIndex + 1;
+    setHistoryIndex(newIndex);
+    setCode(codeHistory[newIndex]);
+  }, [canRedo, historyIndex, codeHistory, setCode]);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd/Ctrl + Z
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          // Redo: Cmd+Shift+Z
+          e.preventDefault();
+          handleRedo();
+        } else {
+          // Undo: Cmd+Z
+          e.preventDefault();
+          handleUndo();
+        }
+      }
+      // Also support Cmd/Ctrl + Y for redo (Windows convention)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   // Handle prompt submission
   const handlePromptSubmit = useCallback(
@@ -145,6 +207,9 @@ export default function CreatePage() {
     setReferenceImage(null);
     setCurrentProjectId(null);
     setLastPrompt('');
+    // Clear undo/redo history
+    setCodeHistory([]);
+    setHistoryIndex(-1);
   }, [reset]);
 
   // Dismiss error
@@ -309,6 +374,10 @@ export default function CreatePage() {
             onPlayPause={togglePlaying}
             onReset={handleReset}
             onFullscreen={handleFullscreen}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
 
           {/* Error display - persistent until dismissed */}
