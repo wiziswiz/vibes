@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, X, Copy, Trash2, Sparkles } from 'lucide-react';
+import { Settings, X, Copy, Trash2, Sparkles, Check } from 'lucide-react';
 
 import { Header } from '@/components/layout/Header';
+import { saveProject, SavedProject } from '@/lib/storage';
 import { P5Canvas } from '@/components/canvas/P5Canvas';
 import { CanvasControls } from '@/components/canvas/CanvasControls';
 import { CodePreview } from '@/components/canvas/CodePreview';
@@ -29,6 +30,9 @@ export default function CreatePage() {
   const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null);
   const [refinementPrompt, setRefinementPrompt] = useState('');
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
+  const [lastPrompt, setLastPrompt] = useState('');
 
   // Workspace store
   const {
@@ -56,6 +60,16 @@ export default function CreatePage() {
       setCode(fullCode);
       setStreamingCode('');
       setIsGenerating(false);
+
+      // Auto-save the project (silent, no popups)
+      if (fullCode && lastPrompt) {
+        const saved = saveProject(lastPrompt, fullCode, currentProjectId || undefined);
+        setCurrentProjectId(saved.id);
+
+        // Show subtle saved indicator
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 2000);
+      }
     },
     onError: (err, info) => {
       setError(err);
@@ -69,6 +83,23 @@ export default function CreatePage() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Load project from sessionStorage (coming from Gallery)
+  useEffect(() => {
+    const loadedProject = sessionStorage.getItem('vibes_load_project');
+    if (loadedProject) {
+      try {
+        const project: SavedProject = JSON.parse(loadedProject);
+        setCode(project.code);
+        setCurrentProjectId(project.id);
+        setLastPrompt(project.prompt);
+        // Clear sessionStorage after loading
+        sessionStorage.removeItem('vibes_load_project');
+      } catch (e) {
+        console.error('Failed to load project from sessionStorage:', e);
+      }
+    }
+  }, [setCode]);
+
   // Handle prompt submission
   const handlePromptSubmit = useCallback(
     async (prompt: string) => {
@@ -76,8 +107,13 @@ export default function CreatePage() {
       setStreamingCode('');
       setError(null);
       setErrorInfo(null);
+      setLastPrompt(prompt);
 
       const isModification = code !== '' && !code.includes('Welcome to VIBES');
+      // If starting fresh (not a modification), clear the project ID
+      if (!isModification) {
+        setCurrentProjectId(null);
+      }
       await generate(prompt, isModification ? code : undefined, referenceImage || undefined);
     },
     [code, generate, setIsGenerating, setError, referenceImage]
@@ -107,6 +143,8 @@ export default function CreatePage() {
     setErrorInfo(null);
     setRefinementPrompt('');
     setReferenceImage(null);
+    setCurrentProjectId(null);
+    setLastPrompt('');
   }, [reset]);
 
   // Dismiss error
@@ -244,6 +282,21 @@ export default function CreatePage() {
                   className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[var(--color-primary)] text-white text-sm font-bold"
                 >
                   {canvasSize.width} × {canvasSize.height}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Saved indicator - subtle, auto-fades */}
+            <AnimatePresence>
+              {showSaved && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: -10 }}
+                  className="absolute -top-3 -right-3 flex items-center gap-1 px-2 py-1 rounded-full bg-green-500 text-white text-xs font-bold shadow-lg"
+                >
+                  <Check className="w-3 h-3" />
+                  Saved
                 </motion.div>
               )}
             </AnimatePresence>

@@ -1,26 +1,81 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { FolderOpen, Plus, Sparkles } from 'lucide-react';
-import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { FolderOpen, Plus, Trash2, Download, Play, Clock } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { getProjects, deleteProject, downloadProject, SavedProject } from '@/lib/storage';
 
 export default function GalleryPage() {
+  const router = useRouter();
   const { theme } = useWorkspaceStore();
+  const [projects, setProjects] = useState<SavedProject[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Apply theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Placeholder data - will be replaced with real data from Supabase
-  const placeholderCreations = [
-    { id: 1, title: 'Bouncing Ball', emoji: '🎮', date: 'Today' },
-    { id: 2, title: 'Rainbow Art', emoji: '🌈', date: 'Yesterday' },
-    { id: 3, title: 'Dancing Stars', emoji: '⭐', date: '2 days ago' },
-  ];
+  // Load projects from localStorage
+  useEffect(() => {
+    setProjects(getProjects());
+  }, []);
+
+  // Format relative time
+  const formatTime = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  // Handle loading a project
+  const handleLoad = (project: SavedProject) => {
+    // Store project in sessionStorage for the create page to pick up
+    sessionStorage.setItem('vibes_load_project', JSON.stringify(project));
+    router.push('/create');
+  };
+
+  // Handle delete
+  const handleDelete = (id: string) => {
+    deleteProject(id);
+    setProjects(getProjects());
+    setDeleteConfirm(null);
+  };
+
+  // Handle download
+  const handleDownload = (project: SavedProject) => {
+    downloadProject(project);
+  };
+
+  // Get an emoji based on the project title/prompt
+  const getProjectEmoji = (project: SavedProject): string => {
+    const text = (project.title + ' ' + project.prompt).toLowerCase();
+    if (text.includes('game') || text.includes('play')) return '🎮';
+    if (text.includes('rainbow') || text.includes('color')) return '🌈';
+    if (text.includes('star') || text.includes('space')) return '⭐';
+    if (text.includes('cat') || text.includes('dog') || text.includes('animal')) return '🐱';
+    if (text.includes('ball') || text.includes('bounce')) return '⚽';
+    if (text.includes('flower') || text.includes('garden')) return '🌸';
+    if (text.includes('fish') || text.includes('ocean') || text.includes('water')) return '🐠';
+    if (text.includes('bird') || text.includes('fly')) return '🐦';
+    if (text.includes('music') || text.includes('sound')) return '🎵';
+    if (text.includes('heart') || text.includes('love')) return '❤️';
+    if (text.includes('fire') || text.includes('flame')) return '🔥';
+    if (text.includes('snow') || text.includes('winter')) return '❄️';
+    return '✨';
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -43,7 +98,9 @@ export default function GalleryPage() {
                   My Creations
                 </h1>
                 <p className="text-[var(--color-text-muted)]">
-                  All your amazing projects in one place!
+                  {projects.length === 0
+                    ? 'Your projects will appear here!'
+                    : `${projects.length} project${projects.length !== 1 ? 's' : ''} saved`}
                 </p>
               </div>
             </div>
@@ -62,46 +119,104 @@ export default function GalleryPage() {
 
           {/* Grid of creations */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {/* Placeholder cards */}
-            {placeholderCreations.map((creation, index) => (
+            {/* Project cards */}
+            {projects.map((project, index) => (
               <motion.div
-                key={creation.id}
-                className="group relative p-6 rounded-2xl bg-[var(--color-surface)] border-2 border-[var(--color-primary)]/30 hover:border-[var(--color-primary)] transition-all cursor-pointer"
+                key={project.id}
+                className="group relative rounded-2xl bg-[var(--color-surface)] border-2 border-[var(--color-primary)]/30 hover:border-[var(--color-primary)] transition-all overflow-hidden"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.02 }}
+                transition={{ delay: index * 0.05 }}
               >
-                {/* Thumbnail placeholder */}
-                <div className="aspect-square rounded-xl bg-[var(--color-background)] flex items-center justify-center mb-4">
-                  <span className="text-6xl">{creation.emoji}</span>
+                {/* Thumbnail area */}
+                <div
+                  className="aspect-square bg-[var(--color-background)] flex items-center justify-center cursor-pointer relative"
+                  onClick={() => handleLoad(project)}
+                >
+                  <span className="text-6xl">{getProjectEmoji(project)}</span>
+
+                  {/* Play overlay on hover */}
+                  <div className="absolute inset-0 bg-[var(--color-primary)]/0 group-hover:bg-[var(--color-primary)]/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="w-16 h-16 rounded-full bg-[var(--color-primary)] flex items-center justify-center">
+                      <Play className="w-8 h-8 text-white ml-1" />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Info */}
-                <h3 className="text-lg font-bold text-[var(--color-text)] mb-1">
-                  {creation.title}
-                </h3>
-                <p className="text-sm text-[var(--color-text-muted)]">
-                  {creation.date}
-                </p>
+                <div className="p-4">
+                  <h3 className="text-lg font-bold text-[var(--color-text)] mb-1 truncate">
+                    {project.title}
+                  </h3>
+                  <div className="flex items-center gap-1 text-sm text-[var(--color-text-muted)]">
+                    <Clock className="w-3 h-3" />
+                    {formatTime(project.updatedAt)}
+                  </div>
 
-                {/* Hover overlay */}
-                <div className="absolute inset-0 rounded-2xl bg-[var(--color-primary)]/0 group-hover:bg-[var(--color-primary)]/10 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <span className="text-[var(--color-text)] font-bold">
-                    Open
-                  </span>
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-3">
+                    <motion.button
+                      onClick={() => handleDownload(project)}
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-primary)]/30 transition-colors"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Download className="w-4 h-4" />
+                      Export
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setDeleteConfirm(project.id)}
+                      className="px-3 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </motion.button>
+                  </div>
                 </div>
+
+                {/* Delete confirmation overlay */}
+                <AnimatePresence>
+                  {deleteConfirm === project.id && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 bg-[var(--color-surface)]/95 flex flex-col items-center justify-center p-4"
+                    >
+                      <p className="text-[var(--color-text)] font-bold mb-4 text-center">
+                        Delete this project?
+                      </p>
+                      <div className="flex gap-2">
+                        <motion.button
+                          onClick={() => setDeleteConfirm(null)}
+                          className="px-4 py-2 rounded-lg bg-[var(--color-primary)]/20 text-[var(--color-text)] font-medium"
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Cancel
+                        </motion.button>
+                        <motion.button
+                          onClick={() => handleDelete(project.id)}
+                          className="px-4 py-2 rounded-lg bg-red-500 text-white font-medium"
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Delete
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ))}
 
-            {/* Empty state / Create new card */}
+            {/* Create new card - always shown */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+              transition={{ delay: projects.length * 0.05 }}
             >
               <Link href="/create">
-                <div className="aspect-square p-6 rounded-2xl border-2 border-dashed border-[var(--color-primary)]/50 hover:border-[var(--color-primary)] transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group">
+                <div className="aspect-[4/5] rounded-2xl border-2 border-dashed border-[var(--color-primary)]/50 hover:border-[var(--color-primary)] transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group">
                   <motion.div
                     className="w-16 h-16 rounded-full bg-[var(--color-primary)]/20 flex items-center justify-center group-hover:bg-[var(--color-primary)]/30 transition-all"
                     whileHover={{ scale: 1.1 }}
@@ -116,25 +231,32 @@ export default function GalleryPage() {
             </motion.div>
           </div>
 
-          {/* Coming soon notice */}
-          <motion.div
-            className="mt-12 p-6 rounded-2xl bg-[var(--color-surface)] border-2 border-[var(--color-accent)]/30 text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-          >
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Sparkles className="w-5 h-5 text-[var(--color-accent)]" />
-              <span className="font-bold text-[var(--color-text)]">
-                Coming Soon!
-              </span>
-            </div>
-            <p className="text-[var(--color-text-muted)]">
-              Save your creations, share them with friends, and see what others have made.
-              <br />
-              For now, have fun creating in the workspace!
-            </p>
-          </motion.div>
+          {/* Empty state message */}
+          {projects.length === 0 && (
+            <motion.div
+              className="mt-8 p-8 rounded-2xl bg-[var(--color-surface)] border-2 border-[var(--color-primary)]/30 text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              <span className="text-6xl mb-4 block">🎨</span>
+              <h2 className="text-xl font-bold text-[var(--color-text)] mb-2">
+                No creations yet!
+              </h2>
+              <p className="text-[var(--color-text-muted)] mb-4">
+                Start creating and your projects will automatically save here.
+              </p>
+              <Link href="/create">
+                <motion.button
+                  className="px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white font-bold"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Start Creating!
+                </motion.button>
+              </Link>
+            </motion.div>
+          )}
         </div>
       </main>
     </div>
