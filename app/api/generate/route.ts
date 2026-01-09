@@ -47,7 +47,7 @@ async function generateWithClaude(
     : prompt;
 
   // Build content array - can include both text and images
-  const content: Array<{ type: 'text'; text: string } | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }> = [];
+  const content: Array<{ type: 'text'; text: string } | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string } }> = [];
 
   // Add reference image if provided
   if (referenceImage) {
